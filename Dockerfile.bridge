@@ -1,0 +1,40 @@
+FROM python:3.8-slim
+
+WORKDIR /app
+
+# Install system dependencies for cityflow
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    g++ \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install other Python dependencies first (excluding CityFlow)
+RUN pip install --no-cache-dir grpcio grpcio-tools protobuf numpy requests
+
+
+# Clone and build CityFlow in a separate cached layer
+RUN git clone --depth=1 https://github.com/cityflow-project/CityFlow.git /tmp/CityFlow \
+    && cd /tmp/CityFlow \
+    && pip install . \
+    && rm -rf /tmp/CityFlow
+
+# Copy source code and config
+COPY src/ /app/src/
+COPY roadnet.json /app/roadnet.json
+COPY flow.json /app/flow.json
+COPY cityflow_config.json /app/cityflow_config.json
+
+# Regenerate proto stubs to match the installed protobuf runtime
+RUN python -m grpc_tools.protoc \
+    -I /app/src/proto \
+    --python_out=/app/src/proto \
+    --grpc_python_out=/app/src/proto \
+    /app/src/proto/communication.proto
+
+# Set Python path
+ENV PYTHONPATH=/app
+
+# Default command
+CMD ["python", "-u", "src/bridge/cityflow_bridge.py"]

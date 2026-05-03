@@ -1,0 +1,94 @@
+version: '3.8'
+
+# ═══════════════════════════════════════════════════════
+#  Traffic Intersection Deployment
+#    - 3 intersection nodes (Main & 1st, Main & 2nd, Main & 3rd)
+#    - Centralized OpenRouter API for agent reasoning
+#    - Each runs SCA Traffic Node with traffic-specific state logic
+#    - Same gRPC + Raft + CausalWatchdog infrastructure as smart-home
+#    - Only domain constants differ (state labels, causal matrix, conflicts)
+# ═══════════════════════════════════════════════════════
+
+services:
+  intersection_a:
+    build: .
+    ports:
+      - "50051:50051"
+    environment:
+      - NODE_ID=intA
+      - ROOM_NAME=Main & 1st St
+      - PORT=50051
+      - PEERS=intB=intersection_b:50051,intC=intersection_c:50051
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - OPENROUTER_MODEL=minimax/minimax-m2.5:free
+    networks:
+      - causal_net
+    command: ["python", "src/nodes/sca_traffic_node.py"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import grpc; ch=grpc.insecure_channel('localhost:50051'); grpc.channel_ready_future(ch).result(timeout=2)"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  intersection_b:
+    build: .
+    ports:
+      - "50052:50051"
+    environment:
+      - NODE_ID=intB
+      - ROOM_NAME=Main & 2nd St
+      - PORT=50051
+      - PEERS=intA=intersection_a:50051,intC=intersection_c:50051
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - OPENROUTER_MODEL=minimax/minimax-m2.5:free
+    networks:
+      - causal_net
+    command: ["python", "src/nodes/sca_traffic_node.py"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import grpc; ch=grpc.insecure_channel('localhost:50051'); grpc.channel_ready_future(ch).result(timeout=2)"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  intersection_c:
+    build: .
+    ports:
+      - "50053:50051"
+    environment:
+      - NODE_ID=intC
+      - ROOM_NAME=Main & 3rd St
+      - PORT=50051
+      - PEERS=intA=intersection_a:50051,intB=intersection_b:50051
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - OPENROUTER_MODEL=minimax/minimax-m2.5:free
+    networks:
+      - causal_net
+    command: ["python", "src/nodes/sca_traffic_node.py"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import grpc; ch=grpc.insecure_channel('localhost:50051'); grpc.channel_ready_future(ch).result(timeout=2)"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  cityflow_bridge:
+    build:
+      context: .
+      dockerfile: Dockerfile.bridge
+    ports:
+      - "8765:8765"   # WebSocket live stream → React frontend
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - WS_PORT=8765
+      - CITYFLOW_CONFIG=/app/cityflow_config.json
+      - SCA_ADDRESS=intersection_a:50051
+      - STEP_INTERVAL=1.0
+      - MIN_GREEN_TIME=15
+      - BOOT_DELAY=10
+    networks:
+      - causal_net
+    depends_on:
+      - intersection_a
+
+networks:
+  causal_net:
+    driver: bridge

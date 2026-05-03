@@ -1,0 +1,7 @@
+grpcio
+grpcio-tools
+protobuf==6.31.1
+numpy
+requests
+websockets>=12.0
+git+https://github.com/cityflow-project/CityFlow.git

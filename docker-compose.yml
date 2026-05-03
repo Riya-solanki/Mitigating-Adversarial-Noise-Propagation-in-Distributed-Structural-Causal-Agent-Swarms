@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - causal_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  node1:
+    build: .
+    ports:
+      - "50051:50051"
+    environment:
+      - NODE_ID=node1
+      - ROOM_NAME=Living Room
+      - PORT=50051
+      - PEERS=node2=node2:50051,node3=node3:50051
+      - OLLAMA_HOST=http://ollama:11434
+    networks:
+      - causal_net
+    depends_on:
+      - ollama
+    healthcheck:
+      test: ["CMD", "python", "-c", "import grpc; ch=grpc.insecure_channel('localhost:50051'); grpc.channel_ready_future(ch).result(timeout=2)"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  node2:
+    build: .
+    ports:
+      - "50052:50051"
+    environment:
+      - NODE_ID=node2
+      - ROOM_NAME=Kitchen
+      - PORT=50051
+      - PEERS=node1=node1:50051,node3=node3:50051
+      - OLLAMA_HOST=http://ollama:11434
+    networks:
+      - causal_net
+    depends_on:
+      - ollama
+    healthcheck:
+      test: ["CMD", "python", "-c", "import grpc; ch=grpc.insecure_channel('localhost:50051'); grpc.channel_ready_future(ch).result(timeout=2)"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  node3:
+    build: .
+    ports:
+      - "50053:50051"
+    environment:
+      - NODE_ID=node3
+      - ROOM_NAME=Bedroom
+      - PORT=50051
+      - PEERS=node1=node1:50051,node2=node2:50051
+      - OLLAMA_HOST=http://ollama:11434
+    networks:
+      - causal_net
+    depends_on:
+      - ollama
+    healthcheck:
+      test: ["CMD", "python", "-c", "import grpc; ch=grpc.insecure_channel('localhost:50051'); grpc.channel_ready_future(ch).result(timeout=2)"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+networks:
+  causal_net:
+    driver: bridge
+
+volumes:
+  ollama_data:

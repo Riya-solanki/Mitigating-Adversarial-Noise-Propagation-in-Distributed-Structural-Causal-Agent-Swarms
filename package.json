@@ -1,0 +1,10 @@
+{
+  "name": "multi-agent-causal-dependency-maintenance",
+  "version": "1.0.0",
+  "description": "Root package to help run frontend and backend easily",
+  "scripts": {
+    "dev": "npm run dev --prefix frontend-react",
+    "install-all": "npm install --prefix frontend-react && npm install --prefix backend",
+    "start-backend": "node backend/server.js"
+  }
+}

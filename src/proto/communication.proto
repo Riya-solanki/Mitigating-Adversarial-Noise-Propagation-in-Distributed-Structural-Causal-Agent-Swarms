@@ -1,0 +1,113 @@
+syntax = "proto3";
+
+package communication;
+
+// The service definition for Node-to-Node communication.
+service NodeCommunication {
+  // Propose an action to other nodes (part of Raft or direct communication)
+  rpc ProposeAction (ActionRequest) returns (ActionResponse) {}
+  
+  // Heartbeat/Sync for maintaining active node list
+  rpc Heartbeat (HeartbeatRequest) returns (HeartbeatResponse) {}
+
+  // Status introspection — used by the dashboard
+  rpc GetNodeStatus (NodeStatusRequest) returns (NodeStatusResponse) {}
+
+  // ── Raft Consensus RPCs ──
+
+  // Invoked by candidates to gather votes during leader election
+  rpc RequestVote (VoteRequest) returns (VoteResponse) {}
+
+  // Invoked by leader to replicate log entries and serve as heartbeat
+  rpc AppendEntries (AppendEntriesRequest) returns (AppendEntriesResponse) {}
+}
+
+// ── Action Messages ──
+
+message ActionRequest {
+  string node_id = 1;
+  string action_type = 2;
+  bytes payload = 3;
+  int64 timestamp = 4;
+  repeated double state_vector = 5;       // Current state of the proposing node
+  repeated double action_vector = 6;      // Proposed action vector
+  string source_room = 7;                 // Source room name (smart-home domain)
+  string target_room = 8;                 // Target room name
+}
+
+message ActionResponse {
+  bool success = 1;
+  string message = 2;
+  bool causally_valid = 3; // True if the Causal Watchdog approved it
+  repeated double resulting_state = 4;    // State after applying the action
+}
+
+// ── Heartbeat Messages ──
+
+message HeartbeatRequest {
+  string node_id = 1;
+  string status = 2;
+}
+
+message HeartbeatResponse {
+  bool acknowledged = 1;
+}
+
+// ── Node Status (for dashboard) ──
+
+message NodeStatusRequest {
+  string requester = 1;
+}
+
+message NodeStatusResponse {
+  string node_id = 1;
+  string room_name = 2;
+  repeated double state_vector = 3;   // Current signal phase state
+  repeated string state_labels = 4;   // Label for each state index
+  string raft_state = 5;              // LEADER / FOLLOWER / CANDIDATE
+  int32  raft_term = 6;
+  string leader_id = 7;
+  int32  log_length = 8;
+  string last_llm_decision = 9;       // Last LLM APPROVE/REJECT line
+  int64  timestamp = 10;
+}
+
+// ── Raft: Log Entry ──
+
+message LogEntry {
+  int32 term = 1;
+  int32 index = 2;
+  string command_type = 3;               // e.g. "SET_STATE", "APPLY_ACTION"
+  bytes command_data = 4;                // Serialised command payload
+  string node_id = 5;                    // Node that originated the entry
+}
+
+// ── Raft: RequestVote ──
+
+message VoteRequest {
+  int32 term = 1;
+  string candidate_id = 2;
+  int32 last_log_index = 3;
+  int32 last_log_term = 4;
+}
+
+message VoteResponse {
+  int32 term = 1;
+  bool vote_granted = 2;
+}
+
+// ── Raft: AppendEntries ──
+
+message AppendEntriesRequest {
+  int32 term = 1;
+  string leader_id = 2;
+  int32 prev_log_index = 3;
+  int32 prev_log_term = 4;
+  repeated LogEntry entries = 5;         // Empty for heartbeats
+  int32 leader_commit = 6;
+}
+
+message AppendEntriesResponse {
+  int32 term = 1;
+  bool success = 2;
+}
