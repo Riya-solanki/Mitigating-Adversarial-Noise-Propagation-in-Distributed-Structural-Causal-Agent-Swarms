@@ -184,6 +184,3 @@ pytest
 
 ---
 
-## 👩‍💻 Author
-
-**Riya Solanki**
